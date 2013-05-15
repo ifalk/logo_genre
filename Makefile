@@ -15,8 +15,12 @@ lemonde_articles.csv: ${SCRIPT_DIR}/get_articles.pl lemonde_rss.pl
 	perl $< lemonde_rss.pl > $@
 
 LEJDD_FEEDS=http://www.lejdd.fr/rss/index.html
-lejdd_rss.csv: ${SCRIPT_DIR}/get_lejdd_feeds_by_column.pl 
+lejdd_rss.pl: ${SCRIPT_DIR}/get_lejdd_feeds_by_column.pl 
 	perl $< ${LEJDD_FEEDS} > $@
+
+lejdd_articles.csv: ${SCRIPT_DIR}/get_articles.pl lejdd_rss.pl
+	perl $< lejdd_rss.pl > $@
+
 
 SLATE_FEEDS=http://www.slate.fr
 slate_rss.csv: ${SCRIPT_DIR}/get_slate_feeds_by_column.pl 
@@ -33,14 +37,11 @@ presseurop_rss.csv: ${SCRIPT_DIR}/get_presseurop_feeds_by_column.pl
 
 DNA_FEEDS=http://www.dna.fr/rss
 # Get categories directly from rss xml file
-# dna_rss.csv: ${SCRIPT_DIR}/get_dna_feeds_by_column.pl 
-# 	perl $< ${DNA_FEEDS} > $@
+dna_articles.csv: ${SCRIPT_DIR}/get_articles_from_feed.pl 
+	perl $< ${DNA_FEEDS} > $@
 
 LMD=http://www.monde-diplomatique.fr/rss/
-# Get categories directly from rss xml file
-# dna_rss.csv: ${SCRIPT_DIR}/get_dna_feeds_by_column.pl 
-# 	perl $< ${DNA_FEEDS} > $@
-
-
+lmd_articles.csv: ${SCRIPT_DIR}/get_articles_from_feed.pl 
+	perl $< ${LMD} > $@
 
 ### Makefile ends here

@@ -56,14 +56,19 @@ print STDERR Dumper(\%opts);
 binmode(STDOUT, ':utf8');
 binmode(STDERR, ':utf8');
 
+my $journal = 'lejdd';
+
 use XML::LibXML;
 
 my $dom = XML::LibXML->load_html(
   location => $ARGV[0], 
   recover => 2,
+  # encoding => 'iso-8859-1',
   );
 
 my @rss = $dom->findnodes('//select/option');
+
+my %feeds;
 
 foreach my $node (@rss) {
   my $link = $node->getAttribute('value');
@@ -72,8 +77,71 @@ foreach my $node (@rss) {
   $column_name =~ s{ \A \s+ }{}xms;
   $column_name =~ s{ \s+ \z }{}xms;
   $column_name =~ s{ \s+ }{ }xmsg;
-  print join(', ', $column_name, $link), "\n";
+
+  $feeds{$link}->{$column_name}++;
 }
+
+my %articles;
+my %links;
+
+use LWP::UserAgent;
+
+my $ua = LWP::UserAgent->new;
+$ua->agent('Mozilla/6.0 (compatible;)');
+foreach my $feed (keys %feeds) {
+
+  print STDERR "Parsing $feed\n";
+
+  my $dom;
+  eval { $dom = XML::LibXML->load_xml(
+	   location => $feed,
+	   )
+  };
+  if ($@) {
+    warn $@;
+    next;
+  }
+  next unless ($dom);
+
+
+  my @items = $dom->findnodes('//item');
+
+  foreach my $item (@items) {
+
+    my $link = ($item->findnodes('./link'))[0]->textContent();
+
+    next if ($links{$link});
+
+    ### check redirection
+    my $request  = HTTP::Request->new( GET => $link );
+    my $response = $ua->request($request);
+    if ( $response->is_success) {
+      $link = $response->request->uri;
+    } else {
+      $links{$link}++;
+      print STDERR "Request unsuccessfull\n";
+      next;
+    }
+    next if ($links{$link});
+
+    $links{$link}++;
+
+    foreach my $column (keys %{ $feeds{$feed} }) {
+      $articles{$journal}->{$feed}->{$link}->{column}->{$column}++;
+    }
+
+    my $date = ($item->findnodes('./pubDate'))[0]->textContent();
+    if ($date) {
+      $articles{$journal}->{$feed}->{$link}->{date} = $date;
+    } else {
+      warn "No date for $link\n";
+    }
+  }
+
+}
+
+print Dumper(\%articles);
+
 
 1;
 

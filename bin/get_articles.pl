@@ -68,109 +68,150 @@ print STDERR Dumper(\%opts);
 
 my $MAX_ARTICLES = 100;
 
+use lib "/home/falk/perl5/lib/perl5";
+use Mojo::UserAgent;
 use LWP::UserAgent;
 use XML::LibXML;
 
 my $lwp_ua = LWP::UserAgent->new;
 $lwp_ua->agent('Mozilla/6.0 (compatible;)');
 
-sub get_lemonde_content {
-  my ($link) = @_;
-  
-  my $text = '';
+my %ARTNBR_PER_FEED = (
+  'lemonde' => 2,
+  'lejdd' => 10,
+  );
 
-  my $dom;
-  eval { $dom = XML::LibXML->load_html(
-	   location => $link,
-	   # encoding => 'iso-8859-1',
-	   recover => 2,
-	   suppress_warnings => 1,
-	   )
-  };
-  if ($@) {
-    warn $@;
+my %GETART_4_JOURNAL = (
+  'lemonde' => sub {
+    my ($link) = @_;
+    
+    my $text = '';
+    
+    my $dom;
+    eval { $dom = XML::LibXML->load_html(
+  	     location => $link,
+  	     # encoding => 'iso-8859-1',
+  	     recover => 2,
+  	     suppress_warnings => 1,
+  	     )
+    };
+    if ($@) {
+      warn $@;
+      return $text;
+    }
+    
+    unless ($dom) {
+      print STDERR "Unsuccessful parse\n";
+      return $text;
+    }
+
+    ### article content
+
+    my @article_els = $dom->findnodes('//div[@id="articleBody"]', $dom);
+    my @blog_entries = $dom->findnodes('//div[@class="entry-content"]//p', $dom);
+    
+    foreach my $div (@article_els, @blog_entries) {
+      my $new_text = $div->textContent();
+      next if ($new_text =~ m{ \A \s* \z }xms);
+      $text = join('', $text, $new_text, "\n");
+    }
+    
     return $text;
-  }
+  },
+  'lejdd' => sub {
+    my ($link) = @_;
+    
+    my $text = '';
 
-  unless ($dom) {
-    print STDERR "Unsuccessful parse\n";
+    my $content = $lwp_ua->get($link)->decoded_content;
+    my $dom = Mojo::DOM->new($content);
+    
+    # scan-content for short articles, article-content for longer ones
+    my $article_entries = $dom->find('div[id="scan-content"] p, div[id="article-content"] p, div[id="article-content"] h2');
+
+    for my $e ($article_entries->each()) {
+      my $new_text = $e->all_text(0);
+
+      my $type = $e->type();
+      $text = join('', $text, $new_text, "\n");
+    }
+
     return $text;
-  }
-
-  ### article content
-
-  my @article_els = $dom->findnodes('//div[@id="articleBody"]', $dom);
-  my @blog_entries = $dom->findnodes('//div[@class="entry-content"]//p', $dom);
-
-  foreach my $div (@article_els, @blog_entries) {
-    my $new_text = $div->textContent();
-    next if ($new_text =~ m{ \A \s* \z }xms);
-    $text = join('', $text, $new_text, "\n");
-  }
-
-  return $text;
-}
+    
+  },
+  );
 
 
 my %articles = %{ do $ARGV[0] };
 
 use List::Util qw(sum);
 
-my $feed_nbr = scalar(keys %{ $articles{lemonde} });
-my $art_nbr = sum map { scalar(keys %{ $articles{lemonde}->{$_} }) }  keys %{ $articles{lemonde} };
-
-
-print STDERR "Number of articles: $art_nbr\n";
-print STDERR "Number of articles per feed ($feed_nbr):\n";
-foreach my $feed (keys %{ $articles{lemonde} }) {
-  my $feed_art_nbr = scalar(keys %{ $articles{lemonde}->{$feed} });
-  print STDERR "$feed: $feed_art_nbr\n";
-
-}
-
-$art_nbr = 0;
+my $art_nbr = 0;
+my $art_nbr_sel = 0;
 
 foreach my $journal (keys %articles) {
 
-  foreach my $feed ((keys %{ $articles{$journal} })) {
+  my $feed_nbr = scalar(keys %{ $articles{$journal} });
+  $art_nbr += sum map { scalar(keys %{ $articles{$journal}->{$_} }) }  keys %{ $articles{$journal} };
 
-    foreach my $link ((keys %{ $articles{$journal}->{$feed} })[0..2]) {
 
+  print STDERR "Number of articles: $art_nbr\n";
+  print STDERR "Number of articles per feed ($feed_nbr):\n";
+  foreach my $feed (keys %{ $articles{$journal} }) {
+    my $feed_art_nbr = scalar(keys %{ $articles{$journal}->{$feed} });
+    print STDERR "$feed: $feed_art_nbr\n";
+    
+  }
+}
+  
+foreach my $journal (keys %articles) {
+
+  unless ($GETART_4_JOURNAL{$journal}) {
+    warn "$journal not supported\n";
+    next;
+  };
+  
+  
+  foreach my $feed (keys %{ $articles{$journal} }) {
+    
+    my $count = 0;
+    foreach my $link (keys %{ $articles{$journal}->{$feed} }) {
+	
       next unless ($link);
-
-      my $text = '';
-      if ($link =~ m{ lemonde }xmsg) {
-
-	$text = get_lemonde_content($link);
-
-	next unless ($text);
-	next if ($text =~ m{ \A \s* \z }xms);
-
-	$text =~ s{ \A \s+ }{}xms;
-	$text =~ s{ \s+ \z }{}xms;
-
-	$art_nbr++;
-
-	my @fields = (
-	  ['URL', $link],
-	  ['Journal', $journal],
-	  ['Flux', $feed],
-	  ['Rubrique', join(', ', keys %{ $articles{$journal}->{$feed}->{$link}->{column} })],
-	  ['Date', $articles{$journal}->{$feed}->{$link}->{date} ],
-	  ['Texte', $text],
-	  );
-
-	foreach my $entry (@fields) {
-	  my ($dt, $dd) = @{ $entry };
-	  print join("\t", $dt, $dd), "\n"; 
-	}
-
+      
+      my $text = $GETART_4_JOURNAL{$journal}->($link);
+      
+      # $text = get_lemonde_content($link);
+      
+      next unless ($text);
+      next if ($text =~ m{ \A \s* \z }xms);
+      
+      $text =~ s{ \A \s+ }{}xms;
+      $text =~ s{ \s+ \z }{}xms;
+      
+      my @fields = (
+	['URL', $link],
+	['Journal', $journal],
+	['Flux', $feed],
+	['Rubrique', join(', ', keys %{ $articles{$journal}->{$feed}->{$link}->{column} })],
+	['Date', $articles{$journal}->{$feed}->{$link}->{date} ],
+	['Texte', $text],
+	);
+      
+      foreach my $entry (@fields) {
+	my ($dt, $dd) = @{ $entry };
+	print join("\t", $dt, $dd), "\n"; 
       }
+      
+      $count++;
+      $art_nbr_sel++;
+      
+      last if ($ARTNBR_PER_FEED{$journal} and $count >= $ARTNBR_PER_FEED{$journal});
     }
   }
 }
 
-print STDERR "Number of articles: $art_nbr\n";
+print STDERR "Number of selected articles: $art_nbr_sel\n";
 
 1;
 
