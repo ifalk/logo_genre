@@ -82,10 +82,11 @@ if ($feed =~ m{ dna }xms) {
 
 my %GETFEED_4_JOURNAL = (
   'dna' => sub {
+    my ($item) = @_;
 
     my ($link, $category, $date) = ('', {}, '');
 
-    my $link = ($item->findnodes('./link'))[0]->textContent();
+    $link = ($item->findnodes('./link'))[0]->textContent();
 
 
     ### check redirection
@@ -94,7 +95,6 @@ my %GETFEED_4_JOURNAL = (
     if ( $response->is_success) {
       $link = $response->request->uri;
     } else {
-      $links{$link}++;
       print STDERR "Request unsuccessfull\n";
       return ($link, $category, $date);
     }
@@ -109,6 +109,32 @@ my %GETFEED_4_JOURNAL = (
     return ($link, $category, $date);
   },
   'lmd' => sub {
+    my ($item) = @_;
+
+    my ($link, $category, $date) = ('', {}, '');
+
+    $link = ($item->findnodes('./link'))[0]->textContent();
+    
+
+    ### check redirection
+    my $request  = HTTP::Request->new( GET => $link );
+    my $response = $ua->request($request);
+    if ( $response->is_success) {
+      $link = $response->request->uri;
+    } else {
+      print STDERR "Request unsuccessfull\n";
+      return ($link, $category, $date);
+    }
+
+    foreach my $n ($item->findnodes('dc:subject')) {
+      my $cat = $n->textContent();
+      $category->{$cat}++;
+    }
+
+    my $date = ($item->findnodes('dc:date'))[0]->textContent();
+
+    return ($link, $category, $date);
+
   },
   );
 
@@ -118,6 +144,7 @@ my %GETART_4_JOURNAL = (
   my ($link) = @_;
 
   my $text = '';
+
 
   my $dom;
   eval { $dom = XML::LibXML->load_html(
@@ -171,6 +198,28 @@ my %GETART_4_JOURNAL = (
 
   ### article content
 
+  my $div = ($dom->findnodes('//div[contains(@class, "contenu-principal")]'))[0];
+
+  my @p_nodes = $div->findnodes('.//p');
+
+  foreach my $n (@p_nodes) {
+    my $new_text = $n->textContent();
+    $text = join("\n", $text, $new_text);
+  }
+
+
+  return $text;
+
+
+  $div = ($dom->findnodes('//div[contains(@class, "texte")]'))[0];
+
+  @p_nodes = $div->findnodes('*[self::h1 or self::h2 or self::h3 or self::p]');
+
+  foreach my $n (@p_nodes) {
+    my $new_text = $n->textContent();
+    $text = join("\n", $new_text);
+  }
+
   return $text;
   },
   );
@@ -189,11 +238,12 @@ my @items = $dom->findnodes('//item');
 
 foreach my $item (@items) {
 
-  my ($link, $category, $date) = $GETFEED_4_JOURNAL{$journal}; 
+  my ($link, $category, $date) = $GETFEED_4_JOURNAL{$journal}->($item); 
 
   next unless ($link);
   next if ($links{$link});
-  
+  $links{$link}++;
+
   next unless ($category);
 
   foreach my $column (keys %{ $category }) {

@@ -72,6 +72,7 @@ use lib "/home/falk/perl5/lib/perl5";
 use Mojo::UserAgent;
 use LWP::UserAgent;
 use XML::LibXML;
+use XML::LibXML::Iterator;
 
 my $lwp_ua = LWP::UserAgent->new;
 $lwp_ua->agent('Mozilla/6.0 (compatible;)');
@@ -79,6 +80,8 @@ $lwp_ua->agent('Mozilla/6.0 (compatible;)');
 my %ARTNBR_PER_FEED = (
   'lemonde' => 2,
   'lejdd' => 10,
+  'slate' => 10,
+  'rue89' => 10,
   );
 
 my %GETART_4_JOURNAL = (
@@ -139,6 +142,128 @@ my %GETART_4_JOURNAL = (
     return $text;
     
   },
+
+  'slate' => sub {
+    my ($link) = @_;
+
+    print STDERR "Link: $link\n";
+    
+    my $text = '';
+    
+    my $dom;
+    eval { $dom = XML::LibXML->load_html(
+  	     location => $link,
+  	     # encoding => 'iso-8859-1',
+  	     recover => 2,
+  	     suppress_warnings => 1,
+  	     )
+    };
+    if ($@) {
+      warn $@;
+      return $text;
+    }
+    
+    unless ($dom) {
+      print STDERR "Unsuccessful parse\n";
+      return $text;
+    }
+
+    my @text_content;
+
+
+    my @article_nodes = $dom->findnodes('//div[@id="article_content" or @class="article_content" or @class="article_text"]');
+
+    print STDERR "Number of article nodes: ", scalar(@article_nodes), "\n";
+
+    foreach my $node (@article_nodes) {
+
+      my $iter = XML::LibXML::Iterator->new( $node );      
+
+      $iter->iterate( 
+	sub {
+	  my ($iter, $cur)=@_;
+
+
+	  $iter->last() if ($cur->localname() and $cur->localname() eq 'div' and $cur->hasAttribute('class') and $cur->getAttribute('class') eq 'clearer');
+
+	  $iter->nextNode() unless ($cur->nodeType() == 1);
+
+	  if ($cur->nodeType() == 1) {
+	    my $name = $cur->localname();
+	    if ($name eq 'p' or $name =~ m{ h [1-4] }xms) {
+	      push(@text_content, $cur->textContent());
+	    }
+	  }
+	} 
+	);
+    }
+
+    $text = join("\n", @text_content);
+		 
+    return $text;
+
+  },
+
+  'rue89' => sub {
+    my ($link) = @_;
+
+    my $text = '';
+    
+    
+    my $dom;
+    eval { $dom = XML::LibXML->load_html(
+  	     location => $link,
+  	     # encoding => 'iso-8859-1',
+  	     recover => 2,
+  	     suppress_warnings => 1,
+  	     )
+    };
+    if ($@) {
+      warn $@;
+      return $text;
+    }
+    
+    unless ($dom) {
+      print STDERR "Unsuccessful parse\n";
+      return $text;
+    }
+
+    my @text_content;
+
+
+    my @article_header = map { $_->textContent() } $dom->findnodes('//div[@id="content"]/h1');
+    
+    my @article_text = map { $_->textContent() } $dom->findnodes('//div[@class="content clearfix"]/p');
+
+
+    $text = join("\n", @article_header, @article_text);
+    return $text;
+
+    my @article_nodes;
+    foreach my $node (@article_nodes) {
+
+      my $iter = XML::LibXML::Iterator->new( $node );      
+
+      $iter->iterate( 
+	sub {
+	  my ($iter, $cur)=@_;
+
+	  $iter->nextNode() unless ($cur->nodeType() == 1);
+
+	  if ($cur->nodeType() == 1) {
+	    my $name = $cur->localname();
+	    if ($name eq 'p' or $name =~ m{ h [1-4] }xms) {
+	      push(@text_content, $cur->textContent());
+	    }
+	  }
+	} 
+	);
+    }
+
+    $text = join("\n", @text_content);
+
+    return $text;
+  },
   );
 
 
@@ -182,10 +307,18 @@ foreach my $journal (keys %articles) {
       my $text = $GETART_4_JOURNAL{$journal}->($link);
       
       # $text = get_lemonde_content($link);
-      
-      next unless ($text);
-      next if ($text =~ m{ \A \s* \z }xms);
-      
+   
+      unless ($text) {
+	print STDERR "No text for link $link\n";
+	next;
+      }
+ 
+      if ($text =~ m{ \A \s* \z }xms) {
+	print STDERR "Empty text for link $link\n";
+	next;
+      }
+
+
       $text =~ s{ \A \s+ }{}xms;
       $text =~ s{ \s+ \z }{}xms;
       

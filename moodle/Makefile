@@ -18,6 +18,15 @@ lejdd_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/lejdd_articles.c
 dna_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/dna_articles.csv
 	perl $< ${LOGO_DIR}/dna_articles.csv > $@
 
+lmd_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/lmd_articles.csv
+	perl $< ${LOGO_DIR}/lmd_articles.csv > $@
+
+slate_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/slate_articles.csv
+	perl $< ${LOGO_DIR}/slate_articles.csv > $@
+
+rue89_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/rue89_articles.csv
+	perl $< ${LOGO_DIR}/rue89_articles.csv > $@
+
 
 
 ### Makefile ends here

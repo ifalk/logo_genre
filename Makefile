@@ -8,27 +8,34 @@
 SCRIPT_DIR=bin
 
 LEMONDE_FEEDS=http://www.lemonde.fr/rss/index.html
-lemonde_rss.pl: ${SCRIPT_DIR}/get_lemonde_feeds_by_column.pl 
-	perl $< ${LEMONDE_FEEDS} > $@
+lemonde_rss.pl: ${SCRIPT_DIR}/get_feeds_by_column.pl 
+	perl $< --journal=lemonde ${LEMONDE_FEEDS} > $@
 
 lemonde_articles.csv: ${SCRIPT_DIR}/get_articles.pl lemonde_rss.pl
 	perl $< lemonde_rss.pl > $@
 
 LEJDD_FEEDS=http://www.lejdd.fr/rss/index.html
-lejdd_rss.pl: ${SCRIPT_DIR}/get_lejdd_feeds_by_column.pl 
-	perl $< ${LEJDD_FEEDS} > $@
+lejdd_rss.pl: ${SCRIPT_DIR}/get_feeds_by_column.pl 
+	perl $< --journal=lejdd ${LEJDD_FEEDS} > $@
 
 lejdd_articles.csv: ${SCRIPT_DIR}/get_articles.pl lejdd_rss.pl
 	perl $< lejdd_rss.pl > $@
 
 
 SLATE_FEEDS=http://www.slate.fr
-slate_rss.csv: ${SCRIPT_DIR}/get_slate_feeds_by_column.pl 
-	perl $< ${SLATE_FEEDS} > $@
+slate_rss.pl: ${SCRIPT_DIR}/get_feeds_by_column.pl 
+	perl $< --journal=slate ${SLATE_FEEDS} > $@
+
+slate_articles.csv: ${SCRIPT_DIR}/get_articles.pl slate_rss.pl
+	perl $< slate_rss.pl > $@ 
 
 RUE89_FEEDS=http://www.rue89.com/les-flux-rss-de-rue89
-rue89_rss.csv: ${SCRIPT_DIR}/get_rue89_feeds_by_column.pl 
-	perl $< ${RUE89_FEEDS} > $@
+rue89_rss.pl: ${SCRIPT_DIR}/get_feeds_by_column.pl 
+	perl $< --journal=rue89 ${RUE89_FEEDS} > $@
+
+rue89_articles.csv: ${SCRIPT_DIR}/get_articles.pl rue89_rss.pl
+	perl $< rue89_rss.pl > $@ 
+
 
 PRESSEUROP_FEEDS=http://www.presseurop.eu/fr/rss
 presseurop_rss.csv: ${SCRIPT_DIR}/get_presseurop_feeds_by_column.pl 
