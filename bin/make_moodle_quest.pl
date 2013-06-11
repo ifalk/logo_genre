@@ -91,35 +91,106 @@ print STDERR Dumper(\%opts);
 use List::MoreUtils qw(first_index);
 
 my @mc_answers = ( 
-  ["hard news", '1'],
-  ["soft news", '1'],
-  ["brève", '1'],
-  ["interview paraphrasée", '1'],
-  ["interview", '1'],
-  ["portrait", '1'],
-  ["nécrologie", '1'],
-  ["revue de presse", '1'],
-  ["éditorial", '1'],
-  ["billet", '1'],
-  ["critique", '1'],
-  ["chronique", '1'],
-  ["tribune libre", '1'],
-  ["je ne sais pas", '1'],
+  # ["hard news", '1'],
+  # ["soft news", '1'],
+  # ["brève", '1'],
+  # ["interview paraphrasée", '1'],
+  # ["interview", '1'],
+  # ["portrait", '1'],
+  # ["nécrologie", '1'],
+  # ["revue de presse", '1'],
+  # ["éditorial", '1'],
+  # ["billet", '1'],
+  # ["critique", '1'],
+  # ["chronique", '1'],
+  # ["tribune libre", '1'],
+  # ["je ne sais pas", '1'],
+  ["chronique", '100'], 
+  ["billet", '90'],
+  ["éditorial", '83.333'],
+  ["tribune libre", '80'],
+  ["critique", '75'],
+  ["hard news", '70'],
+  ["soft news", '66.666'],
+  ["brève / filet", '60'],
+  ["dépêche", '50'],
+  ["interview", '40'],
+  ["interview paraphrasée", '33.333'],
+  ["portrait", '30'],
+  ["nécrologie", '25'],
+  ["revue de presse", '20'],
+  ["reportage", '16.666'],
+  ["enquête", '14.2857'],
+  ["analyse", '12.5'],
+  ["je ne sais pas", '11.111'],
   );
 
-#### elements ( [ el. name, el. text content ]) to be created and edded to each mc question
+#### elements ( [ el. name, el. text content ]) to be created and added to each mc question
 my @mc_elements = (
-		   [ 'shuffleanswers', '0' ],
-		   [ 'single', 'false' ],
-		   [ 'answernumbering', 'none' ],
-		  );
+  [ 'defaultgrade', scalar(@mc_answers) ],
+  [ 'penalty', 0 ],
+  [ 'shuffleanswers', '0' ],
+  [ 'single', 'true' ],
+  [ 'answernumbering', 'none' ],
+  );
 
 
-use XML::LibXML;
 
 # binmode(STDOUT, ':utf8');
 binmode(STDERR, ':utf8');
 
+
+my %links;
+
+open (my $fh, '<:encoding(utf-8)', $ARGV[0]) or die "Couldn't open $ARGV[0] for reading: $!\n";
+
+my ($link, $journal, $feed, $cat, $date, $text);
+while (my $line = <$fh>) {
+
+  if ($line =~ m{ \A \s* \z }xms) {
+    $text .= '<br/>';
+    next;
+  }
+
+  chomp($line);
+
+  my ($dd, @rest) = split(/\t/, $line);
+  if ($dd eq 'URL') {
+
+    if ($link) {
+
+      $links{$link} = join("\t", $journal, $feed, $cat, $date, $text);
+
+      ($link, $journal, $feed, $cat, $date, $text) = (undef, undef, undef, undef, undef, undef);
+    }
+
+    $link = join("\t", @rest);
+
+  } elsif ($dd eq 'Journal') {
+    $journal = join("\t", @rest);
+  } elsif ($dd eq 'Flux') {
+    $feed = join("\t", @rest);
+  } elsif ($dd eq 'Rubrique') {
+    $cat = join("\t", @rest);
+  } elsif ($dd eq 'Date') {
+    $date = join("\t", @rest);
+  } elsif ($dd eq 'Texte') {
+    $text = '<p>'.join("\t", @rest).'</p>';
+  } else {
+    $text .= "<p>$line</p>";
+  }
+}
+
+### last entry
+if ($link) {
+  $links{$link} = join("\t", $journal, $feed, $cat, $date, $text);
+  ($link, $journal, $feed, $cat, $date, $text) = (undef, undef, undef, undef, undef, undef);
+}
+
+close $fh;
+
+
+use XML::LibXML;
 
 ##### create xml document
 
@@ -210,6 +281,12 @@ sub make_mc {
   $name->addChild($name_text);
   $quest->addChild($name);
 
+  foreach my $el_ref (@mc_elements) {
+    my ($el_name, $el_txt_content) = @{ $el_ref };
+    my $el = $doc->createElement($el_name);
+    $el->addChild($doc->createTextNode($el_txt_content));
+    $quest->addChild($el);
+  }
   foreach my $ref (@mc_answers) { 
     my ($ans_text_content, $fraction) = @{ $ref };
 
@@ -220,13 +297,6 @@ sub make_mc {
     $answer->addChild($ans_text);
 
     $quest->addChild($answer);
-
-    foreach my $el_ref (@mc_elements) {
-      my ($el_name, $el_txt_content) = @{ $el_ref };
-      my $el = $doc->createElement($el_name);
-      $el->addChild($doc->createTextNode($el_txt_content));
-      $quest->addChild($el);
-    }
   }
 
   $quiz->addChild($quest);
@@ -274,54 +344,15 @@ sub make_shortanswer {
 
 }
 
-open (my $fh, '<:encoding(utf-8)', $ARGV[0]) or die "Couldn't open $ARGV[0] for reading: $!\n";
+### read links in hash and add elements to xml document
 
-my ($link, $journal, $feed, $cat, $date, $text);
-while (my $line = <$fh>) {
-
-  if ($line =~ m{ \A \s* \z }xms) {
-    $text .= '<br/>';
-    next;
-  }
-
-  chomp($line);
-
-  my ($dd, @rest) = split(/\t/, $line);
-  if ($dd eq 'URL') {
-
-    if ($link) {
-      make_question($link, $journal, $feed, $cat, $date, $text);
-      make_mc($link);
-      make_shortanswer($link);
-      ($link, $journal, $feed, $cat, $date, $text) = (undef, undef, undef, undef, undef, undef);
-    }
-
-    $link = join("\t", @rest);
-
-  } elsif ($dd eq 'Journal') {
-    $journal = join("\t", @rest);
-  } elsif ($dd eq 'Flux') {
-    $feed = join("\t", @rest);
-  } elsif ($dd eq 'Rubrique') {
-    $cat = join("\t", @rest);
-  } elsif ($dd eq 'Date') {
-    $date = join("\t", @rest);
-  } elsif ($dd eq 'Texte') {
-    $text = '<p>'.join("\t", @rest).'</p>';
-  } else {
-    $text .= "<p>$line</p>";
-  }
-}
-
-### last entry
-if ($link) {
+foreach my $link (keys %links) {
+  my ($journal, $feed, $cat, $date, $text) = split(/\t/, $links{$link});
+  
   make_question($link, $journal, $feed, $cat, $date, $text);
   make_mc($link);
   make_shortanswer($link);
-  ($link, $journal, $feed, $cat, $date, $text) = (undef, undef, undef, undef, undef, undef);
 }
-
-close $fh;
 
 $doc->toFH(\*STDOUT, 1);
 

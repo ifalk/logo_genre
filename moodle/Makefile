@@ -27,6 +27,14 @@ slate_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/slate_articles.c
 rue89_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/rue89_articles.csv
 	perl $< ${LOGO_DIR}/rue89_articles.csv > $@
 
+presseurop_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/presseurop_articles.csv
+	perl $< ${LOGO_DIR}/presseurop_articles.csv > $@
+
+lequipe_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/lequipe_articles.csv
+	perl $< ${LOGO_DIR}/lequipe_articles.csv > $@
+
+lalibre_quest.xml: ${SCRIPT_DIR}/make_moodle_quest.pl ${LOGO_DIR}/lalibre_articles.csv
+	perl $< ${LOGO_DIR}/lalibre_articles.csv > $@
 
 
 ### Makefile ends here

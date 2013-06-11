@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- mode: perl; buffer-file-coding-system: utf-8 -*-
-# get_articles.pl                   falk@lormoral
+# get_articles_with_paragraphs.pl                   falk@lormoral
 #                    07 May 2013
 
 use warnings;
@@ -18,11 +18,11 @@ use utf8;
 
 =head1 NAME
 
-get_articles.pl
+get_articles_with_paragraphs.pl
 
 =head1 USAGE
 
-  perl get_articles.pl hash giving links and other information 
+  perl get_articles_with_paragraphs.pl hash giving links and other information 
 
 =head1 DESCRIPTION
 
@@ -149,8 +149,6 @@ my %GETART_4_JOURNAL = (
   'slate' => sub {
     my ($link) = @_;
 
-    print STDERR "Link: $link\n";
-    
     my $text = '';
     
     my $dom;
@@ -171,7 +169,7 @@ my %GETART_4_JOURNAL = (
       return $text;
     }
 
-    my @text_content;
+    my $text_content;
 
 
     my @article_nodes = $dom->findnodes('//div[@id="article_content" or @class="article_content" or @class="article_text"]');
@@ -194,16 +192,16 @@ my %GETART_4_JOURNAL = (
 	  if ($cur->nodeType() == 1) {
 	    my $name = $cur->localname();
 	    if ($name eq 'p' or $name =~ m{ h [1-4] }xms) {
-	      push(@text_content, $cur->textContent());
+	      my $text = $cur->textContent();
+	      $iter->nextNode() if ($text =~ m{ \A \s* \z }xms);
+	      push(@{ $text_content }, [$name, $text]);
 	    }
 	  }
 	} 
 	);
     }
 
-    $text = join("\n", @text_content);
-		 
-    return $text;
+    return $text_content;
 
   },
 
@@ -231,47 +229,68 @@ my %GETART_4_JOURNAL = (
       return $text;
     }
 
-    my @text_content;
+    my $text_content;
 
 
-    my @article_header = map { $_->textContent() } $dom->findnodes('//div[@id="content"]/h1');
+    # my @article_header = $dom->findnodes('//div[@id="content"]/h1');
+
+    # foreach my $el (@article_header) {
+    #   my $text = $el->textContent();
+    #   next if ($text =~ m{ \A \s* \z }xms);
+    #   push(@{ $text_content }, ['h1', $el->textContent()]);
+    # }
+
+
+    my @div_nodes = $dom->findnodes('//div[@id="content"]');
+
+    print STDERR "Number of div nodes: ", scalar(@div_nodes), "\n";
+
+    if (@div_nodes) {
+
+      # if (@p_nodes) {
+      
+      # 	foreach my $p_node (@p_nodes) {
+
+      # 	  my $text = $p_node->textContent();
+      # 	  next if ($text =~ m{ \A \s* \z }xms);
+      # 	  push(@{ $text_content }, ['p', $text]);
+      # 	}
+	
+
+      my $iter = XML::LibXML::Iterator->new( $div_nodes[0] );      
     
-    my @article_text = map { $_->textContent() } $dom->findnodes('//div[@class="content clearfix"]/p');
-
-
-    $text = join("\n", @article_header, @article_text);
-    return $text;
-
-    my @article_nodes;
-    foreach my $node (@article_nodes) {
-
-      my $iter = XML::LibXML::Iterator->new( $node );      
-
       $iter->iterate( 
 	sub {
 	  my ($iter, $cur)=@_;
-
-	  $iter->nextNode() unless ($cur->nodeType() == 1);
-
+	    
 	  if ($cur->nodeType() == 1) {
 	    my $name = $cur->localname();
+
+	    if ($name eq 'div') {
+	      if ($cur->hasAttribute('id') and $cur->getAttribute('id') eq 'commentaires') {
+		$iter->last();
+	      }
+	    }
+
 	    if ($name eq 'p' or $name =~ m{ h [1-4] }xms) {
-	      push(@text_content, $cur->textContent());
+	      my $text = $cur->textContent();
+	      unless ($text =~ m{ \A \s* \z }xms) {
+		push(@{ $text_content }, [$name, $text]);
+	      }
 	    }
 	  }
 	} 
 	);
     }
-
-    $text = join("\n", @text_content);
-
-    return $text;
+  
+    return $text_content;
+  
   },
 
   'presseurop' => sub {
     my ($link) = @_;
 
-    my $text = '';
+    my $text_content;
 
     my $dom;
     eval { $dom = XML::LibXML->load_html(
@@ -282,54 +301,58 @@ my %GETART_4_JOURNAL = (
     };
     if ($@) {
       warn $@;
-      return $text;
+      return $text_content;
     }
     
     unless ($dom) {
       print STDERR "Unsuccessful parse\n";
-      return $text;
+      return $text_content;
     }
 
     my @article_header = $dom->findnodes('//article/hgroup/h1');
     
-    my @article_nodes = $dom->findnodes('//article//div[contains(@class, "bodytext")]');
+    foreach my $node (@article_header) {
+      my $text = $node->textContent();
 
-    foreach my $node (@article_header, @article_nodes) {
-      my $new_text = $node->textContent();
-      next if ($new_text =~ m{ \A \s* \z }xms);
-      $text = join('', $text, $new_text, "\n");
+      unless ($text =~ m{ \A \s* \z }xms) {
+	push(@{ $text_content }, ['h1', $text]);
+      }
     }
 
-    # my @text_content;
 
-    # foreach my $node (@article_nodes) {
+    my @article_nodes = $dom->findnodes('//article//div[@class="panel"]');
 
-    #   my $iter = XML::LibXML::Iterator->new( $node );      
+    if (@article_nodes) {
+      my $iter = XML::LibXML::Iterator->new( $article_nodes[0] );      
+      $iter->iterate( 
+	sub {
+	  my ($iter, $cur)=@_;
+	  
+	  if ($cur->nodeType() == 1) {
+	    my $name = $cur->localname();
+	    
+	    if ($name eq 'aside') {
+	      $iter->last();
+	    }
 
-    #   $iter->iterate( 
-    # 	sub {
-    # 	  my ($iter, $cur)=@_;
-
-    # 	  $iter->nextNode() unless ($cur->nodeType() == 1);
-
-    # 	  if ($cur->nodeType() == 1) {
-    # 	    my $name = $cur->localname();
-    # 	    if ($name eq 'p' or $name =~ m{ h [1-4] }xms) {
-    # 	      push(@text_content, $cur->textContent());
-    # 	      $iter->nextNode();
-    # 	    }
-    # 	  }
-    # 	} 
-    # 	);
-    # }
-
-    return $text;
+	    if ($name eq 'p') {
+	      my $text = $cur->textContent();
+	      unless ($text =~ m{ \A \s* \z }xms) {
+		push(@{ $text_content }, [$name, $text]);
+	      }
+	    }
+	  }
+	} 
+	)
+    };
+  
+    return $text_content;
   },
 
   'lequipe' => sub {
     my ($link) = @_;
 
-    my $text = '';
+    my $text_content = [];
 
     my $dom;
 
@@ -343,16 +366,15 @@ my %GETART_4_JOURNAL = (
     };
     if ($@) {
       warn $@;
-      return $text;
+      return $text_content;
     }
     
     unless ($dom) {
       print STDERR "Unsuccessful parse\n";
-      return $text;
+      return $text_content;
     }
 
     my @article_nodes = $dom->findnodes('//article');
-    my @text_content;
 
     foreach my $article (@article_nodes) {
 
@@ -363,36 +385,64 @@ my %GETART_4_JOURNAL = (
 	my $current = $iter->current();
 	if ($current->nodeType() eq '1') {
 	  my $name = $current->localname();
-	  if ($name eq 'h1') {
+	  if ($name =~ m{ h[1-4] }xms) {
 	    my $text = $current->textContent();
 	    unless ($text =~ m{ \A \s* \z }xms) {
 	      $text =~ s{ \s+ }{ }xms;
-	      push(@text_content, $text);
+	      push( @{ $text_content }, [ $name, $text ] );
 	    }
 	  } elsif ($name eq 'div') {
 	    if ($current->hasAttribute('class')) {
 	      my $class = $current->getAttribute('class');
 	      if ($class =~ m{ paragr \b }xms) {
+
+		# my @children = $current->childNodes();
+
+		# my $text = '';
+		# foreach my $child (@children) {
+		#   if ($child->nodeType() eq '3') {
+		#     my $new_text = $child->data();
+		#     next if ($text =~ m{ \A \s* \z });
+		#     $text = join(' ', $text, $new_text);
+		#   } elsif ($child->nodeType() eq '1') {
+		#     my $name = $child->localname();
+		#     if ($name eq 'br') {
+		#       if ($text) {
+		# 	push (@{ $text_content }, [ 'p', $text ]);
+		# 	$text = '';
+		#       }
+		#     } else {
+		#       my $new_text = $child->textContent();
+		#       next if ($text =~ m{ \A \s* \z });
+		#       $text = join(' ', $text, $new_text);
+		#     }
+		#   }
+		# }
+
 		my $text = $current->textContent();
-		unless ($text =~ m{ \A \s* \z }xms) {
-		  push(@text_content, $text);
+
+		if ($text and $text !~ m{ \A \s* \z }xms) {
+		  push (@{ $text_content }, [ 'p', $text ]);
 		}
+
 	      }
+	    } elsif ($current->hasAttribute('id')) {
+	      my $id = $current->getAttribute('id');
+	      last if ($id eq 'new_bloc_bas_breve');
+	      last if ($id eq 'ensavoirplus');
 	    }
 	  }
 	}
       }
     }
 
-    $text = join("\n", @text_content);
-
-    return $text;
+    return $text_content;
   },
 
   'lalibre' => sub {
     my ($link) = @_;
     
-    my $text = '';
+    my $text_content;
     
     my $dom;
     
@@ -406,36 +456,51 @@ my %GETART_4_JOURNAL = (
     };
     if ($@) {
       warn $@;
-      return $text;
+      return $text_content;
     }
     
     unless ($dom) {
       print STDERR "Unsuccessful parse\n";
-      return $text;
+      return $text_content;
     }
 
     my $header = ($dom->findnodes('//h1'))[1]->textContent();
+    $header =~ s{ \A \s+ }{}xms;
+    $header =~ s{ \s+ \z }{}xms;
+    $header =~ s{ \s+ }{ }xmsg;
+    $header =~ s{ \222 }{'}xmsg;
     
-    my @hat = map { $_->textContent() } $dom->findnodes('//div[@id="articleHat"]');
+    unless ($header =~ m{ \A \s* \z }xms) {
+      push(@{ $text_content }, [ 'h1', $header ]);
+    }
 
-    my @article = map {$_->textContent() } $dom->findnodes('//div[@id="articleText"]/p');
+    my @hat = $dom->findnodes('//div[@id="articleHat"]');
 
-    my @text_content = map {
-      my $line = $_;
-      $line =~ s{ \A \s+ }{}xms;
-      $line =~ s{ \s+ \z }{}xms;
-      $line =~ s{ \s+ }{ }xmsg;
-      $line =~ s{ \222 }{'}xmsg;
-      $line
-      } 
-    grep { 
-      $_ !~ m{ \A \s* \z }xms; 
-    } 
-    ($header, @hat, @article);
+    foreach my $h_node (@hat) {
+      my $text = $h_node->textContent();
+      unless ($text =~ m{ \A \s* \z }xms) {
+	$text =~ s{ \A \s+ }{}xms;
+	$text =~ s{ \s+ \z }{}xms;
+	$text =~ s{ \s+ }{ }xmsg;
+	$text =~ s{ \222 }{'}xmsg;
+	push(@{ $text_content }, [ 'h2', $text ]);
+      }
+    }
 
-    $text = join("\n", @text_content);
+    my @article = $dom->findnodes('//div[@id="articleText"]/p');
 
-    return $text;
+    foreach my $a_node (@article) {
+
+      my $text = $a_node->textContent();
+      $text =~ s{ \A \s+ }{}xms;
+      $text =~ s{ \s+ \z }{}xms;
+      $text =~ s{ \s+ }{ }xmsg;
+      $text =~ s{ \222 }{'}xmsg;
+      push(@{ $text_content }, [ 'p', $text ]);
+
+    }
+
+    return $text_content;
   },
   
   );
@@ -463,6 +528,7 @@ foreach my $journal (keys %articles) {
   }
 }
   
+
 foreach my $journal (keys %articles) {
 
   unless ($GETART_4_JOURNAL{$journal}) {
@@ -470,7 +536,27 @@ foreach my $journal (keys %articles) {
     next;
   };
   
-  
+  my $dom = XML::LibXML->createDocument( "1.0", "UTF-8" );
+  my $html = $dom->createElement('html');
+  $html->setAttribute( 'xmnls', "http://www.w3.org/1999/xhtml" );
+  $html->setAttribute( 'xml:lang', 'fr' );
+  $dom->setDocumentElement($html);
+
+  my $head = $dom->createElement('head');
+  my $title = $dom->createElement('title');
+  my $title_text = $dom->createTextNode("Articles du journal $journal");
+  $title->addChild($title_text);
+  $head->addChild($title);
+  $html->addChild($head);
+
+  my $body = $dom->createElement('body');
+  $title = $dom->createElement('h1');
+  $title->addChild($dom->createTextNode("Articles du journal $journal"));
+  $body->addChild($title);
+
+  $body->addChild($dom->createElement('hr'));
+
+
   foreach my $feed (keys %{ $articles{$journal} }) {
     
     my $count = 0;
@@ -487,29 +573,87 @@ foreach my $journal (keys %articles) {
 	print STDERR "No text for link $link\n";
 	next;
       }
- 
-      if ($text =~ m{ \A \s* \z }xms) {
-	print STDERR "Empty text for link $link\n";
+
+      unless (@{ $text }) {
+	print STDERR "No text for link $link\n";
 	next;
       }
 
+      my $rubrique = join(', ', keys %{ $articles{$journal}->{$feed}->{$link}->{column} });
 
-      $text =~ s{ \A \s+ }{}xms;
-      $text =~ s{ \s+ \z }{}xms;
-      
+      #### slate's columns are in iso-8859-1 (although the xml encoding is utf-8)
+      use Encode;
+
+      my %to_fix_encoding = (
+	'slate' => 1,
+	'rue89' => 1,
+	'lequipe' => 1,
+	);
+
+      if ($to_fix_encoding{$journal}) {
+	$rubrique = encode('utf-8', $rubrique);
+      }
+
       my @fields = (
-	['URL', $link],
+	# ['URL', $link],
 	['Journal', $journal],
-	['Flux', $feed],
-	['Rubrique', join(', ', keys %{ $articles{$journal}->{$feed}->{$link}->{column} })],
+	# ['Flux', $feed],
+	['Rubrique', $rubrique],
 	['Date', $articles{$journal}->{$feed}->{$link}->{date} ],
-	['Texte', $text],
+	# ['Texte', $text],
 	);
       
-      foreach my $entry (@fields) {
-	my ($dt, $dd) = @{ $entry };
-	print join("\t", $dt, $dd), "\n"; 
+      my $dl = $dom->createElement('dl');
+
+      foreach my $click_ref (['URL', $link], ['Flux', $feed]) { 
+
+	my ($dt_text, $dd_text) = @{ $click_ref };
+
+	my $dt = $dom->createElement('dt');
+	$dt->addChild($dom->createTextNode($dt_text));
+	$dl->addChild($dt);
+	
+	my $dd = $dom->createElement('dd');
+	my $a = $dom->createElement('a');
+	$a->setAttribute('href', $dd_text);
+	$a->setAttribute('target', '_blank');
+	$a->addChild($dom->createTextNode($dd_text));
+	$dd->addChild($a);
+	$dl->addChild($dd);
       }
+		     
+      
+      foreach my $entry (@fields) {
+	my ($dt_text, $dd_text) = @{ $entry };
+
+	my $dt = $dom->createElement('dt');
+	$dt->addChild($dom->createTextNode($dt_text));
+	$dl->addChild($dt);
+	
+	my $dd = $dom->createElement('dd');
+	$dd->addChild($dom->createTextNode($dd_text));
+	$dl->addChild($dd);
+      }
+
+      $body->addChild($dl);
+
+      my $h1 = $dom->createElement('h1');
+      $h1->addChild($dom->createTextNode("Texte de l'article"));
+      $body->addChild($h1);
+
+      my $div = $dom->createElement('div');
+      $div->setAttribute('styĺe', 'background-color: silver');
+
+      foreach my $text_ref (@{ $text }) {
+	my ($name, $content) = @{ $text_ref };
+	my $el = $dom->createElement($name);
+	$el->addChild($dom->createTextNode($content));
+	$div->addChild($el);
+      }
+      
+      $body->addChild($div);
+      
+      $body->addChild($dom->createElement('hr'));
       
       $count++;
       $art_nbr_sel++;
@@ -517,6 +661,11 @@ foreach my $journal (keys %articles) {
       last if ($ARTNBR_PER_FEED{$journal} and $count >= $ARTNBR_PER_FEED{$journal});
     }
   }
+
+  $html->addChild($body);
+  my $file_name = join('_', $journal, 'articles');
+  $file_name = join('.', $file_name, 'html');
+  $dom->toFile($file_name, 1);
 }
 
 print STDERR "Number of selected articles: $art_nbr_sel\n";

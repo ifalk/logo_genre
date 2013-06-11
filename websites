@@ -1,0 +1,25 @@
+# lemonde
+
+http://www.lemonde.fr/rss/
+http://www.liberation.fr/rss/
+http://www.lefigaro.fr/rss/
+http://www.la-croix.com/rss	
+http://www.lequipe.fr/rss
+http://www.lesechos.fr/rss/
+
+# le journal de dimanche
+# fil rss général
+http://cdn1-lejdd.ladmedia.fr/var/exports/rss/rss.xml
+# par thématique
+http://lejdd.feedsportal.com/c/285/f/568037/index.rss, Culture
+http://lejdd.feedsportal.com/c/285/f/568035/index.rss, International
+http://lejdd.feedsportal.com/c/285/f/568039/index.rss, Media
+http://lejdd.feedsportal.com/c/285/f/568034/index.rss, Politique
+http://lejdd.feedsportal.com/c/285/f/568032/index.rss, Société
+http://lejdd.feedsportal.com/c/285/f/568038/index.rss, Sport
+http://lejdd.feedsportal.com/c/285/f/568036/index.rss, Economie
+http://lejdd.feedsportal.com/c/285/f/568033/index.rss, Ecologie
+http://lejdd.feedsportal.com/c/285/f/568043/index.rss, Turf
+http://lejdd.feedsportal.com/c/285/f/568042/index.rss, Poker
+http://lejdd.feedsportal.com/c/285/f/568040/index.rss, Style de vie
+http://lejdd.feedsportal.com/c/285/f/568041/index.rss, Paris
