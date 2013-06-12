@@ -91,7 +91,7 @@ my %GETART_4_JOURNAL = (
   'lemonde' => sub {
     my ($link) = @_;
     
-    my $text = '';
+    my $text_content = [];
     
     my $dom;
     eval { $dom = XML::LibXML->load_html(
@@ -103,26 +103,60 @@ my %GETART_4_JOURNAL = (
     };
     if ($@) {
       warn $@;
-      return $text;
+      return $text_content;
     }
-    
+
     unless ($dom) {
       print STDERR "Unsuccessful parse\n";
-      return $text;
+      return $text_content;
     }
 
-    ### article content
 
-    my @article_els = $dom->findnodes('//div[@id="articleBody"]', $dom);
-    my @blog_entries = $dom->findnodes('//div[@class="entry-content"]//p', $dom);
     
-    foreach my $div (@article_els, @blog_entries) {
-      my $new_text = $div->textContent();
-      next if ($new_text =~ m{ \A \s* \z }xms);
-      $text = join('', $text, $new_text, "\n");
+
+    my @article_nodes = $dom->findnodes('//article');
+    my @blog_nodes = $dom->findnodes('//div[starts-with(@id, "post")]');
+
+    push(@article_nodes, @blog_nodes);
+
+    if (@article_nodes) {
+      my @todo = grep { $_->nodeType() == 1 } $article_nodes[0]->childNodes();
+
+      while (@todo) {
+	my $cur = shift(@todo);
+
+
+	my $name = $cur->localname();
+
+	if ($link =~ m{ turquie-la-police }xms) {
+	  if ($name eq 'p') {
+	    if (my $first = $cur->firstChild()) {
+	      next if ($first->nodeType() == 1 and
+		       $first->localname() eq 'section');
+	    }
+	  }
+	}
+
+	next if ($name eq 'p' and $cur->hasAttribute('class') and $cur->getAttribute('class') =~ m{ \b lire \b }xmsi);
+
+	next if ($name eq 'p' and $cur->hasAttribute('itemprop') and $cur->getAttribute('itemprop') =~ m{ \b author \b }xmsi);
+
+	if ($name eq 'p' or $name =~ m{ h [1-4] }xms) {
+	  my $text = $cur->textContent();
+
+	  unless ($text =~ m{ \A \s* \z }xms) {
+	    push(@{ $text_content }, [$name, $text]);
+	  }
+	} else {
+	  my @next = grep { $_->nodeType() == 1 } $cur->childNodes();
+	  push(@todo, @next);
+	}
+      }
+
     }
-    
-    return $text;
+
+    return $text_content;
+
   },
   'lejdd' => sub {
     my ($link) = @_;
@@ -588,6 +622,7 @@ foreach my $journal (keys %articles) {
 	'slate' => 1,
 	'rue89' => 1,
 	'lequipe' => 1,
+	'lemonde' => 1,
 	);
 
       if ($to_fix_encoding{$journal}) {

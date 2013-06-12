@@ -14,6 +14,9 @@ lemonde_rss.pl: ${SCRIPT_DIR}/get_feeds_by_column.pl
 lemonde_articles.csv: ${SCRIPT_DIR}/get_articles.pl lemonde_rss.pl
 	perl $< lemonde_rss.pl > $@
 
+lemonde_articles_with_paragraphs.html: ${SCRIPT_DIR}/get_articles_with_paragraphs.pl lemonde_rss.pl 
+	perl $< lemonde_rss.pl
+
 LEJDD_FEEDS=http://www.lejdd.fr/rss/index.html
 lejdd_rss.pl: ${SCRIPT_DIR}/get_feeds_by_column.pl 
 	perl $< --journal=lejdd ${LEJDD_FEEDS} > $@
